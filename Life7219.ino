@@ -44,12 +44,82 @@ void setup() {
 
 void loop() {
   Life();
+  Particles();
   lc.clearDisplay(0);
   Serial.println("Loop over!");
 }
 
 //--------------------------------------------------------------------------------
 // functions
+
+void Particles() {
+  const int numparticles = 2;
+
+  long p_framecount = 0;
+
+  int velx[numparticles]; 
+  int vely[numparticles]; 
+  int posx[numparticles]; 
+  int posy[numparticles];
+
+  int max_x = 7;
+  int max_y = 7;
+  int maxspeed = 2;
+
+  int row, col, i;
+
+  for(i = 0; i<numparticles; i++) {
+    velx[i] = 1;
+    vely[i] = 1;
+    posx[i] = rand() % max_x;
+    posy[i] = rand() % max_y;
+    //    Serial.println("%d: Speed X: %d\nSpeed Y: %d\nPos X: %d\nPos Y: %d\n", i, velx[i], vely[i], posx[i], posy[i]);
+  }
+
+  while(p_framecount <= 400) {
+    Serial.println(p_framecount);
+    p_framecount++;
+    lc.clearDisplay(0);
+    for( i = 0; i<numparticles; i++) {
+      row = posx[i];
+      col = posy[i];
+      lc.setLed(0,row,col,1);
+
+      posx[i]+=velx[i];
+      posy[i]+=vely[i];
+
+      if(posx[i]<0) {
+        posx[i]=1;
+        velx[i]=-velx[i];
+      }
+      else if(posx[i]>=max_x) {
+        posx[i] = max_x+(max_x-posx[i]);
+        velx[i]= -velx[i];
+	vely[i] = vely[i]+random(-1,1);
+
+        if(vely[i]>maxspeed) vely[i] = maxspeed;
+        else if(vely[i]<-maxspeed) vely[i] = -maxspeed;
+      }
+
+      if(posy[i]<0) {
+        posy[i]=1;
+        vely[i]=-vely[i];
+      }
+      else if(posy[i]>=max_y) {
+        posy[i] = max_y+(max_y-posy[i]);
+        vely[i]=-vely[i];
+	velx[i] = velx[i]+random(-1,1);
+        if(velx[i]>maxspeed) velx[i] = maxspeed;
+        else if(velx[i]<-maxspeed) velx[i] = -maxspeed;
+      }
+
+    }
+    delay(50);
+  }
+}
+
+
+
 
 void Life() {
   int frame_number, generation;
@@ -218,12 +288,6 @@ void generate_next_generation(void){  //looks at current generation, writes to n
     }
   }
 }
-
-//char get_led_xy (char col, char row) {
-//  if(col < 0 | col > COLS-1) { return 0; }
-//  if(row < 0 | row > ROWS-1) { return 0;  }
-//  return world[col][row][0];
-//}
 
 char get_led_xy (char col, char row) {
   if(TOROID == 1) {
