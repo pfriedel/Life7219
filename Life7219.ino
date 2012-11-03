@@ -5,6 +5,8 @@
 // planar world or toroidal world?
 #define TOROID 1
 
+#define swap(a, b) { uint16_t t = a; a = b; b = t; }
+
 byte world[COLS][ROWS][2]; // Create a double buffered world.
 byte frame_log[COLS][ROWS];
 
@@ -33,10 +35,8 @@ Frame count: 4571
 
 //--------------------------------------------------------------------------------
 void setup() {
-  Serial.begin(115200);
-
   lc.shutdown(0,false);
-  lc.setIntensity(0,1);
+  lc.setIntensity(0,0);
   lc.clearDisplay(0);
   randomSeed(analogRead(1));
   randomSeed(1);
@@ -46,7 +46,6 @@ void loop() {
   Life();
   Particles();
   lc.clearDisplay(0);
-  Serial.println("Loop over!");
 }
 
 //--------------------------------------------------------------------------------
@@ -62,62 +61,85 @@ void Particles() {
   int posx[numparticles]; 
   int posy[numparticles];
 
-  int max_x = 7;
-  int max_y = 7;
-  int maxspeed = 2;
+  // How big do you want the virtual particle space to be?  Higher resolution
+  // means slower but more precise particles (without shortening the delay)
+  int res = 7;
+
+  // And how big is the display space? (actual pixels, not off-by-one)
+  #define DISPLAY_X 8
+  #define DISPLAY_Y 8
+
+  int max_x = DISPLAY_X<<res;
+  int max_y = DISPLAY_Y<<res;
+
+  int maxspeed = 30;
 
   int row, col, i;
 
   for(i = 0; i<numparticles; i++) {
-    velx[i] = 1;
-    vely[i] = 1;
-    posx[i] = rand() % max_x;
-    posy[i] = rand() % max_y;
-    //    Serial.println("%d: Speed X: %d\nSpeed Y: %d\nPos X: %d\nPos Y: %d\n", i, velx[i], vely[i], posx[i], posy[i]);
+    velx[i] = random(11)+5;
+    vely[i] = random(11)+5;
+    posx[i] = (i%2)<<res;
+    posy[i] = (i/2)<<res;
   }
 
-  while(p_framecount <= 400) {
-    Serial.println(p_framecount);
+  while(p_framecount <= 4000) {
     p_framecount++;
     lc.clearDisplay(0);
-    for( i = 0; i<numparticles; i++) {
-      row = posx[i];
-      col = posy[i];
-      lc.setLed(0,row,col,1);
+    
+    // This only really works for particles % 2 = 0
+    // Draw the Qix for each pair of particles
+    for( i = 0; i < numparticles; i = i+2) {
+      drawLine(posx[i]>>res, posy[i]>>res, posx[i+1]>>res, posy[i+1]>>res);
+    }
 
+    // Update the location of the particles for the next frame.
+    for( i = 0; i<numparticles; i++) {
+
+      // The new positions are the old positions plus the velocity in the correct axis.
       posx[i]+=velx[i];
       posy[i]+=vely[i];
+      
+      // If the x position will go below 0
+      if(posx[i] < 0) {
+	posx[i] = 1; // the new x position is 1;
+	velx[i] = -velx[i]; // The velocity on the x axis inverts (boing!)
+	vely[i] = vely[i]+random(-1,1); // The velocity on the y axis gets a small random change.
 
-      if(posx[i]<0) {
-        posx[i]=1;
-        velx[i]=-velx[i];
+	if(vely[i]>maxspeed) vely[i] = maxspeed; // if the new y velocity is too fast, pin it to the maximum speed.
+	else if(vely[i]<-maxspeed) vely[i] = -maxspeed;
       }
+
       else if(posx[i]>=max_x) {
-        posx[i] = max_x+(max_x-posx[i]);
-        velx[i]= -velx[i];
+	posx[i] = max_x+(max_x-posx[i]);
+	velx[i] = -velx[i];
 	vely[i] = vely[i]+random(-1,1);
-
-        if(vely[i]>maxspeed) vely[i] = maxspeed;
-        else if(vely[i]<-maxspeed) vely[i] = -maxspeed;
+	
+	if(vely[i]>maxspeed) vely[i] = maxspeed;
+	else if(vely[i]<-maxspeed) vely[i] = -maxspeed;
       }
-
+      
       if(posy[i]<0) {
-        posy[i]=1;
-        vely[i]=-vely[i];
+	posy[i] = 1;
+	vely[i] = -vely[i];
+	velx[i] = velx[i]+random(-1,1);
+
+	if(velx[i]>maxspeed) velx[i] = maxspeed;
+	else if(velx[i]<-maxspeed) velx[i] = -maxspeed;
       }
       else if(posy[i]>=max_y) {
-        posy[i] = max_y+(max_y-posy[i]);
-        vely[i]=-vely[i];
+	posy[i] = max_y+(max_y-posy[i]);
+	vely[i] = -vely[i];
 	velx[i] = velx[i]+random(-1,1);
-        if(velx[i]>maxspeed) velx[i] = maxspeed;
-        else if(velx[i]<-maxspeed) velx[i] = -maxspeed;
+      
+	if(velx[i]>maxspeed) velx[i] = maxspeed;
+	else if(velx[i]<-maxspeed) velx[i] = -maxspeed;
       }
 
     }
-    delay(50);
+    delay(5);
   }
 }
-
 
 
 
@@ -148,7 +170,7 @@ void Life() {
     
     // if there are no changes between the current generation and the next generation (still life), break out of the loop.
     if( current_equals_next() == 1 ) {
-      Serial.println("Death due to still life.");
+      //      Serial.println("Death due to still life.");
       draw_frame();
       delay(500);
       break;
@@ -156,14 +178,14 @@ void Life() {
     
     // If the next frame is the same as a frame from 20 generations ago, we're in a loop.
     if( next_equals_logged_frame() == 1 ) {
-      Serial.println("Death due to oscillator.");
+      //      Serial.println("Death due to oscillator.");
       draw_frame();
       delay(500);
       break;
     }
 
     if( generation >= 2000) {
-      Serial.print("Died due to methuselah's syndrome at generation "); Serial.println(generation); 
+      //      Serial.print("Died due to methuselah's syndrome at generation "); Serial.println(generation); 
       delay(500);
       break;
     }
@@ -173,7 +195,7 @@ void Life() {
     frame_number++;
     generation++;
     
-    Serial.println(generation);
+    //    Serial.println(generation);
     
     if(frame_number == 20 ) {
       frame_number = 0;
@@ -202,9 +224,6 @@ void set_random_next_frame(void) {
   resetDisplay();
   
   int density = random(40,80);
-  
-  //  Serial.print("Initial density: ");
-  //  Serial.println(density);
   
   for(int y=0; y<ROWS; y++) {
     for(int x=0; x<COLS; x++) {
@@ -342,3 +361,44 @@ void draw_frame_by_pixel (void) {
   }
 }
 
+
+void drawLine(int8_t x0, int8_t y0, int8_t x1, int8_t y1) {
+  uint16_t steep = abs(y1 - y0) > abs(x1 - x0);
+  if (steep) {
+    swap(x0, y0);
+    swap(x1, y1);
+  }
+  
+  if (x0 > x1) {
+    swap(x0, x1);
+    swap(y0, y1);
+  }
+  
+  uint16_t dx, dy;
+  dx = x1 - x0;
+  dy = abs(y1 - y0);
+  
+  int16_t err = dx / 2;
+  int16_t ystep;
+  
+  if (y0 < y1) {
+    ystep = 1;
+  } 
+  else {
+    ystep = -1;
+  }
+  
+  for (; x0<=x1; x0++) {
+    if (steep) {
+      lc.setLed(0,y0,x0,1);
+    }
+    else {
+      lc.setLed(0,x0,y0,1);
+    }
+    err -= dy;
+    if (err < 0) {
+      y0 += ystep;
+      err += dx;
+    }
+  }
+}
